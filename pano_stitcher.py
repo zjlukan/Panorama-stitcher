@@ -6,111 +6,116 @@ import numpy as np
 import numpy.linalg
 import tkinter as tk
 import sys
+import blending
 
 
-def create_gauss(img, levels):
+def extract_features(images):
     """
-    create a Gaussian (resolution) pyramid
-    :param img: a copy of the original image that will become the first layer of the pyramid
-    :param levels: the number of levels in the pyramid
-    :return: a Gaussian pyramid represented by list of images with length levels
+    Uses SIFT to find all the features for each image
+    :param images: a list containing 4-channel images
+    :return: a list features where features[i] = list of [keypoints, descriptor] pairs for image i
     """
-    gauss = []
-    layer = img.copy()
-    for x in range(levels):
-        gauss.append(layer)
-        layer = cv2.pyrDown(layer)
-    return gauss
 
-
-def create_laplacian(gauss, levels):
-    """
-    create a Laplacian (scaled image details) pyramid from a Gaussian pyramid
-    :param gauss: a Gaussian pyramid represented by list of images with length levels
-    :param levels: the number of levels in the pyramid
-    :return: a Laplacian pyramid represented by list of images with length levels
-    """
-    laplacian = []
-    for x in range(levels - 1):
-        up = cv2.pyrUp(gauss[x + 1])
-        up = cv2.resize(up, (gauss[x].shape[1], gauss[x].shape[0]))
-        resid = cv2.subtract(gauss[x], up)
-        laplacian.append(resid)
-    laplacian.append(gauss[-1])
-    return laplacian
-
-
-def create_mask(image):
-    """
-    create a distance-based mask from image
-    :param image: 4-channel image
-    :return: mask with same height and width as input image with values between 0 and 1 representing the distance from
-    the nearest pixel with non-zero alpha
-    """
-    # create binary mask based on alpha channel of image
-    mask = (image[:, :, 3] > 1).astype(np.uint8)
-    kernel = np.ones((5, 5), np.uint8)
-
-    # get rid of holes
-    mask = cv2.dilate(mask, kernel, iterations=1)
-    mask = cv2.erode(mask, kernel, iterations=1)
-    dist = cv2.distanceTransform(mask, cv2.DIST_L2, 3)
-    return dist
-
-
-def homography(image_a, image_b, show=False):
-    """
-    Uses SIFT and k nearest neighbors to compute a homography between 2 images
-    :param show: display steps
-    :param image_a: first 4-channel image
-    :param image_b: second 4-channel image
-    :return: homography matrix
-    """
-    # use SIFT to get key points and descriptors for the 2 images
-    # lower edgeThreshold: less tolerance for edges, higher contrastThreshold: less tolerance for areas of low contrast
+    # use SIFT to get key points and descriptors for the image
+    # lower edgeThreshold: less tolerance for edges
+    # higher contrastThreshold: less tolerance for areas of low contrast
     sift = cv2.SIFT_create(edgeThreshold=20, contrastThreshold=0.01)
-    kpoints, des = sift.detectAndCompute(image_a, None)
-    kpoints2, des2 = sift.detectAndCompute(image_b, None)
+
+    features = []
+    for x in range(0, len(images)):
+        features.append(sift.detectAndCompute(images[x], None))
+
+    return features
+
+
+def image_match(idx, images, features):
+    """
+    Find the for the given image (images[idx]), find the n images with the most feature matches (n=6 by default)
+    :param features: a list features where features[i] = [list of keypoints, list of descriptors] pairs for image i
+    :param idx: the index of the image to be matched to the other images in the list
+    :param images: list of the other 4-channel images which will be matched to images[idx]
+    :return: a list of indexes corresponding to the images with the most matches
+    """
+    POTENTIAL_MATCHES = 6
+
+    img_des = []  # contains the feature descriptors of image
+    des = []  # contains the feature descriptors of all other images
+    best_imgs = []  # the number of feature matches per image
+    des_idx = []  # des_idx[i] corresponds to the index of the image of des[i]
+
+    for x in range(0, len(features)):
+        if x == idx:
+            img_des = features[x][1]
+            best_imgs.append([x, -1])
+        else:
+            des.extend(features[x][1])
+            des_idx.extend([x]*len(features[x][1]))
+            best_imgs.append([x, 0])
+
+    des = np.array(des)
 
     # find matches
     bf = cv2.BFMatcher()
-    matches = bf.knnMatch(des, des2, k=2)
+    matches = bf.knnMatch(img_des, des, k=4)
 
-    # use only the matches that have sufficient distance between best and second-best match to reduce ambiguous matches
-    goodm = []
-    for m, n in matches:
-        if m.distance < 0.5 * n.distance:
-            goodm.append([m])
+    # for each match, find which image it corresponds to and iterate best_imgs by 1
+    for m in matches:
+        for x in range(4):
+            best_imgs[des_idx[m[x].trainIdx]][1] += 1
 
-    # use findHomography to get the 3x3 matrix
-    pts1 = np.float32([kpoints[m[0].queryIdx].pt for m in goodm])
-    pts2 = np.float32([kpoints2[m[0].trainIdx].pt for m in goodm])
-    h = cv2.findHomography(pts1, pts2, cv2.RANSAC)
+    # sort the images by the number of features they have in common with image, take the 6 best ones
+    best_imgs = sorted(best_imgs, key=lambda x: x[1])
 
-    if show:
-        # display keypoints
-        kpoints_a_i = cv2.drawKeypoints(image_a, kpoints, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-        kpoints_b_i = cv2.drawKeypoints(image_b, kpoints2, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    # don't bother with finding the best matches if there are fewer images than the threshold
+    if len(images) <= POTENTIAL_MATCHES + 1:
+        return best_imgs[1:]
 
-        # display matches
-        matches_i = cv2.drawMatchesKnn(image_a, kpoints, image_b, kpoints2, matches, None,
-                                       flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    best_imgs = best_imgs[-6:]
+    return best_imgs
 
-        # display good matches
-        goodm_i = cv2.drawMatchesKnn(image_a, kpoints, image_b, kpoints2, goodm, None,
-                                     flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
-        # show images
-        cv2.imshow("Image_a keypoints", kpoints_a_i)
-        cv2.waitKey(0)
-        cv2.imshow("Image_b keypoints", kpoints_b_i)
-        cv2.waitKey(0)
-        cv2.imshow("Knn matched keypoints", matches_i)
-        cv2.waitKey(0)
-        cv2.imshow("Good matches", goodm_i)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    return h
+def match_verification(idx, images, features, best_imgs):
+    """
+    Use a probabilistic model to determine using the number of inliers and the total number of features
+    between images whether to pair them or not
+    :param idx:
+    :param images:
+    :param features:
+    :param best_imgs:
+    :return:
+    """
+    a = 8
+    b = 0.3
+    match = []
+    kpoints = features[idx][0]
+
+    for l in best_imgs:
+        i = l[0]
+        kpoints2 = features[i][0]
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(features[idx][1], features[i][1], k=2)
+        goodm = []
+
+        # use only the matches that have sufficient distance between best and 2nd best match to reduce ambiguous matches
+        for m, n in matches:
+            if m.distance < 0.5 * n.distance:
+                goodm.append([m])
+
+        # get keypoints
+        pts1 = np.float32([kpoints[m[0].queryIdx].pt for m in goodm])
+        pts2 = np.float32([kpoints2[m[0].trainIdx].pt for m in goodm])
+
+        # findHomography returns a matrix and a mask, where a 1 denotes an inlier and a 0 denotes an outlier
+        h, mask = cv2.findHomography(pts1, pts2, cv2.RANSAC)
+
+        n_inliers = sum(mask)
+        n_features = len(mask)
+
+        if n_inliers > a + b*n_features:
+            match.append(True)
+        else:
+            match.append(False)
+    return match
 
 
 def warp_image(image, homography, show=False):
@@ -185,67 +190,6 @@ def warp_image(image, homography, show=False):
     return [warp, ULcorner[0][0]]
 
 
-def blend_images(image_a, image_b, levels, show=False):
-    """
-    Uses Laplacian pyramids to blend 2 images together
-    :param show: display steps
-    :param image_a: 4-channel image, will correspond to 1 in the mask
-    :param image_b: 4-channel image, will correspond to 0 in the mask
-    :param levels: the number of levels in the Laplacian pyramid
-    :return: 4-channel image that blends a and b
-    """
-    # each pixel in the mask has value in [0,1] corresponding to the distance from the image
-    distA = create_mask(image_a)
-    distB = create_mask(image_b)
-    normA = cv2.normalize(distA, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    normB = cv2.normalize(distB, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-
-    # combine both masks
-    mask = distA / (distA + distB + 1e-8)
-
-    # process the rgb part of the image separately
-    a_rgb = image_a[:, :, :3].astype(np.float32) / 255.0
-    b_rgb = image_b[:, :, :3].astype(np.float32) / 255.0
-
-    # create gaussian and laplacian pyramids for both images and the mask
-    m_gauss = create_gauss(mask, levels)
-    a_gauss = create_gauss(a_rgb, levels)
-    b_gauss = create_gauss(b_rgb, levels)
-
-    a_laplacian = create_laplacian(a_gauss, levels)
-    b_laplacian = create_laplacian(b_gauss, levels)
-
-    # blend all levels of each laplacian according to the weights in the mask
-    blend = []
-    for x in range(levels):
-        blend.append(a_laplacian[x] * m_gauss[x][..., np.newaxis] +
-                     b_laplacian[x] * (1 - m_gauss[x][..., np.newaxis]))
-
-    # collapse the combined pyramid
-    img = blend[-1]
-    for x in range(len(blend) - 2, -1, -1):
-        up_i = cv2.pyrUp(img)
-        up_i = cv2.resize(up_i, (blend[x].shape[1], blend[x].shape[0]))
-        img = up_i + blend[x]
-
-    # convert image to uint8 4-channel with black regions set to alpha 0
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
-    mask2 = (img[:, :, 0] == 0) & (img[:, :, 1] == 0) & (img[:, :, 2] == 0)
-    img[mask2, 3] = 0
-    img = cv2.convertScaleAbs(img, alpha=255)
-
-    if show:
-        # display images
-        cv2.imshow("distA", normA)
-        cv2.waitKey(0)
-        cv2.imshow("distB", normB)
-        cv2.waitKey(0)
-        cv2.imshow("final image", img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    return img
-
-
 def create_mosaic(images, origins, show=False):
     """
     Given a list of 4-channel images and a list of coordinates corresponding to their upper left corners, combine them
@@ -283,7 +227,7 @@ def create_mosaic(images, origins, show=False):
         x = int(origins[i][0] - minX)
         y = int(origins[i][1] - minY)
         img1[y:y + images[i].shape[0], x:x + images[i].shape[1]] = images[i]
-        result = blend_images(result, img1, 12)
+        result = blending.blend_images(result, img1, 12)
 
     if show:
         cv2.imshow("Image", result)
@@ -302,15 +246,14 @@ def create_pano(images, show=False):
     img = cv2.imread(images[0])
     img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
     for x in range(1, len(images)):
-
         # iteratively stitch together each image in images
         img2 = cv2.imread(images[x])
         img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2BGRA)
         img2_copy = cv2.cvtColor(img2, cv2.COLOR_BGRA2BGR)
         img_copy = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        h = homography(img2_copy, img_copy, show)
-        warp = warp_image(img2, h[0], show)
-        img = create_mosaic([img, warp[0]], [[0, 0], warp[1]], show)
+        # h = homography(img2_copy, img_copy, show)
+        # warp = warp_image(img2, h[0], show)
+        # img = create_mosaic([img, warp[0]], [[0, 0], warp[1]], show)
 
     # adjust the image to proper size to fit screen
     root = tk.Tk()
@@ -328,6 +271,24 @@ def create_pano(images, show=False):
     return img
 
 
+def process_images(img_paths):
+    images = []
+    for i in img_paths:
+        img = cv2.imread(i)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+        images.append(img)
+    f = extract_features(images)
+    image_match(0, images, f)
+
+imgs = []
+for x in range(0,10):
+    imgs.append("test_data_1/medium0" + str(x) + ".jpg")
+for x in range(10, 13):
+    imgs.append("test_data_1/medium" + str(x) + ".jpg")
+process_images(imgs)
+
+
+'''
 i = []
 inp = ""
 n = 0
@@ -338,12 +299,13 @@ try:
     n = int(sys.argv[1])
 except ValueError:
     print("n is not a valid number")
-if len(sys.argv) > n+2:
-    if sys.argv[n+2] != "0":
+if len(sys.argv) > n + 2:
+    if sys.argv[n + 2] != "0":
         show_steps = True
-for x in range(2, n+2):
+for x in range(2, n + 2):
     i.append(sys.argv[x])
 
 image_final = create_pano(i, show_steps)
 cv2.imshow("image", image_final)
 cv2.waitKey(0)
+'''
