@@ -74,31 +74,69 @@ def image_match(idx, images, features):
     return best_imgs
 
 
+def in_img(pts, H, w, h):
+    p = np.c_[pts, np.ones(len(pts))] @ H.T
+
+    # compute homogeneous coords
+    z = p[:, 2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        xy = p[:, :2] / z[:, None]
+
+    # z > 0 is for if the point lies behind the camera
+    # determine which points end up in the frame of the other image when the homography is applied
+    return (z > 0) & (xy[:, 0] >= 0) & (xy[:, 0] < w) & (xy[:, 1] >= 0) & (xy[:, 1] < h)
+
+
+def count_overlap(H, pts1, pts2, img1, img2):
+    """
+    count the number of features in the overlap area between the two images, according to the given homography
+    :param H: the homography from img1 to img2
+    :param pts1: the keypoints of image 1
+    :param pts2: the keypoints of image 2
+    :param img1: 4-channel image
+    :param img2: 4-channel image
+    :return: the number of features in overlap area
+    """
+    h1 = img1.shape[0]
+    w1 = img1.shape[1]
+    h2 = img2.shape[0]
+    w2 = img2.shape[1]
+
+    in1 = in_img(pts1, H, w2, h2)
+    in2 = in_img(pts2, np.linalg.inv(H), w1, h1)
+
+    return int((in1 & in2).sum())
+
+
 def match_verification(idx, images, features, best_imgs):
     """
-    Use a probabilistic model to determine using the number of inliers and the total number of features
-    between images whether to pair them or not
-    :param idx:
-    :param images:
-    :param features:
-    :param best_imgs:
-    :return:
+    Use a probabilistic model to determine using the number of inliers and the total number of features in the area of
+    overlap between images whether to pair them or not
+    :param idx: the index of the image to be matched with the others
+    :param images: the list of all 4-channel images
+    :param features: a list features where features[i] = [list of keypoints, list of descriptors] pairs for image i
+    :param best_imgs: a list of the form [[image index, number of features matched to images[idx], ...] with the highest
+    number of feature matches
+    :return: a bool list that indicates which images to pair images[idx] with, where match[i] corresponds to the image
+    images[best_imgs[i]], and a list of homographies between images[idx] and the images in best_imgs
     """
     a = 8
     b = 0.3
     match = []
     kpoints = features[idx][0]
+    homographies = []
 
     for l in best_imgs:
         i = l[0]
         kpoints2 = features[i][0]
         bf = cv2.BFMatcher()
+
         matches = bf.knnMatch(features[idx][1], features[i][1], k=2)
-        goodm = []
 
         # use only the matches that have sufficient distance between best and 2nd best match to reduce ambiguous matches
+        goodm = []
         for m, n in matches:
-            if m.distance < 0.5 * n.distance:
+            if m.distance < 0.8 * n.distance:
                 goodm.append([m])
 
         # get keypoints
@@ -107,9 +145,10 @@ def match_verification(idx, images, features, best_imgs):
 
         # findHomography returns a matrix and a mask, where a 1 denotes an inlier and a 0 denotes an outlier
         h, mask = cv2.findHomography(pts1, pts2, cv2.RANSAC)
+        homographies.append(h)
 
-        n_inliers = sum(mask)
-        n_features = len(mask)
+        n_features = count_overlap(h, pts1, pts2, goodm, images[idx], images[i])
+        n_inliers = int(mask.sum())
 
         if n_inliers > a + b*n_features:
             match.append(True)
@@ -117,6 +156,15 @@ def match_verification(idx, images, features, best_imgs):
             match.append(False)
     return match
 
+
+def residuals(params, pts1, pts2):
+    H = np.append(params, 1.0).reshape(3, 3)          # fix H[2,2] = 1 (8 free parameters)
+    proj = cv2.perspectiveTransform(pts1.reshape(-1, 1, 2), H).reshape(-1, 2)
+    return (proj - pts2).ravel()
+
+
+def bundle_adjust(images, features, homographies, pairs):
+    pass
 
 def warp_image(image, homography, show=False):
     """
@@ -278,7 +326,20 @@ def process_images(img_paths):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
         images.append(img)
     f = extract_features(images)
-    image_match(0, images, f)
+    matches =[]
+    homographies = []
+    for x in range(len(images)):
+        best_m = image_match(x, images, f)
+        keep, h = match_verification(x, images, f, best_m)
+        matches.append([])
+        homographies.append([])
+        for i in range(len(best_m)):
+            if keep[i]:
+                matches[x].append(best_m[i])
+                homographies[x].append(h)
+
+
+
 
 imgs = []
 for x in range(0,10):
