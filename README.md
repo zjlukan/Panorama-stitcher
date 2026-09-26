@@ -1,18 +1,19 @@
-# Features  
-**Automatic sequencing:**  
-* Computes most likely image pairings for each image, then uses a probabilistic model to determine whether or not to keep the pairing  
-* Images are paired independent of the sequence they were uploaded in  
+# Description
+Image stitching is the process of combining multiple images with overlapping fields to produce a composite image that has a wider field of view than a single image. It is used in a variety of fields, such as satellite imaging and medical imaging. This project provides an easy way of stitching a sequence of ordered images and seamlessly blending them. OpenCV is utilized in this project, but none of the functions from the stitcher class were used.
 
-**Bundle Adjustment:**
-* Simply concatenating pairwise homographies leads to issues such as accumulated error  
-* Bundle adjustment is used instead to solve for camera parameters jointly, where the sum squared reprojection error is minimized using Levenberg-Marquardt  
+# Features  
+**Homography Fitting:**  
+* Features matched using SIFT are run through a ratio test to eliminate ambiguous matches  
+* Homographies are estimated using RANSAC algorithm for invariance to outliers  
+
+**Image Warping + Mosiacing:**
+* Uses a running panorama and iteratively builds the panorama with each image which is then cropped
 
 **Blending**
-* Uses a graph-cut seam optimizer to find the least intrusive line of stitching
-* Images are blended using multi-band blending to minimize the appearance of edges
+* Laplacian pyramid blending merges images frequency-band by frequency-band, eliminating the hard seams a flat crossfade would leave behind
 
 **Front end**
-* Streamlit is used for the browser interface
+* Streamlit is used for the browser interface. Images are uploaded and assigned an order and the final image can be downloaded as a PNG.
 
 ## Dependencies: 
 **Python3**
