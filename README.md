@@ -7,7 +7,7 @@ Image stitching is the process of combining multiple images with overlapping fie
 * Homographies are estimated using RANSAC algorithm for invariance to outliers  
 
 **Image Warping + Mosiacing:**
-* Uses a running panorama and iteratively builds the panorama with each image which is then cropped
+* Uses a running panorama and iteratively builds it with each image in order
 
 **Blending**
 * Laplacian pyramid blending merges images frequency-band by frequency-band, eliminating the hard seams a flat crossfade would leave behind
