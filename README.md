@@ -36,7 +36,7 @@ python3 ./main.py [--show] [image 1 path] [image 2 path] ... [image n path]
 
 example:  
 
-python .\pano_stitcher.py --show image1.png image2.png image3.png  
+> python .\pano_stitcher.py --show image1.png image2.png image3.png  
 
 **Show steps:**  
 Optional argument that will create a visual for every step in the pano-stitching process if enabled
