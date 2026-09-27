@@ -1,6 +1,8 @@
 # Description
 Image stitching is the process of combining multiple images with overlapping fields to produce a composite image that has a wider field of view than a single image. It is used in a variety of fields, such as satellite imaging and medical imaging. This project provides an easy way of stitching a sequence of ordered images and seamlessly blending them. OpenCV is utilized in this project, but none of the functions from the stitcher class were used.
 
+![Example panorama](images/pano1.png)
+
 # Features  
 **Homography Fitting:**  
 * Features matched using SIFT are run through a ratio test to eliminate ambiguous matches  
