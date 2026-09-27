@@ -39,4 +39,9 @@ example:
 > python .\pano_stitcher.py --show image1.png image2.png image3.png  
 
 **Show steps:**  
-Optional argument that will create a visual for every step in the pano-stitching process if enabled
+Optional argument that will create a visual for every step in the pano-stitching process if enabled  
+
+To run the front end locally using localhost, run the following command:  
+```
+streamlit run app.py
+```
