@@ -1,10 +1,5 @@
 """
 Streamlit front end for the ordered-pair panorama stitcher in panorama_core.py.
-
-Images are stitched one at a time, in the order you specify, by folding each new image
-onto the running panorama with homography() -> warp_image() -> create_mosaic()
-(Laplacian-pyramid multi-band blend), exactly as panorama_core.create_pano() does --
-this app just replaces file paths / cv2.imshow / tkinter with a web UI.
 """
 
 from io import BytesIO
@@ -19,15 +14,14 @@ from pano_core import homography, warp_image, create_mosaic
 
 st.set_page_config(page_title="Panorama Stitcher", page_icon="🖼️", layout="wide")
 
-st.title("🖼️ Panorama Stitcher")
-st.caption("SIFT feature matching + homography warping + multi-band Laplacian blending")
+st.title("Panorama Stitcher")
 
 with st.sidebar:
     st.header("Options")
     show_matches = st.checkbox("Show feature matches for each pair", value=False)
     st.caption(
-        "Stitching folds each image, in order, onto the running panorama. "
-        "Best results come from images with real overlap, taken from roughly the same viewpoint."
+        "In order for the stitcher to work, the images must be in order where consecutive images have overlap\n"
+        "For best results, use images taken from nearly the same viewpoint"
     )
 
 
@@ -36,7 +30,7 @@ def load_bgra(uploaded_file) -> np.ndarray:
     data = np.frombuffer(uploaded_file.read(), dtype=np.uint8)
     img = cv2.imdecode(data, cv2.IMREAD_COLOR)
     if img is None:
-        raise ValueError(f"Could not decode {uploaded_file.name}")
+        raise ValueError(f"ERROR: Could not decode {uploaded_file.name}")
     return cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
 
 
@@ -66,15 +60,15 @@ uploaded_files = st.file_uploader(
 )
 
 if not uploaded_files:
-    st.info("Upload 2 or more overlapping images to get started.")
+    st.info("Requires at least 2 images")
     st.stop()
 
 if len(uploaded_files) < 2:
-    st.warning("Add at least one more image -- stitching needs 2 or more.")
+    st.warning("ERROR: Add at least one more image")
     st.stop()
 
 st.subheader("1. Set the stitching order")
-st.caption("Give each image a position. Ties are broken by upload order.")
+st.caption("Give each image a position")
 
 order_map = {}
 thumb_cols = st.columns(min(len(uploaded_files), 4))
@@ -116,7 +110,7 @@ if st.button("Stitch panorama", type="primary"):
         pano_bgr = cv2.cvtColor(pano, cv2.COLOR_BGRA2BGR)
 
         if show_matches:
-            with st.expander(f"Feature matches: image {i + 2} vs. running panorama"):
+            with st.expander(f"Feature matches: image {i + 2} and running panorama"):
                 st.image(draw_matches(next_bgr, pano_bgr), use_container_width=True)
 
         h = homography(next_bgr, pano_bgr, show=False)
@@ -126,7 +120,7 @@ if st.button("Stitch panorama", type="primary"):
         progress.progress((i + 1) / n_pairs, text=f"Blended image {i + 2} of {len(images)}")
 
     progress.empty()
-    st.success("Panorama complete!")
+    st.success("Panorama complete")
     st.image(bgra_to_rgba(pano), caption="Final panorama", use_container_width=True)
 
     pil_img = Image.fromarray(bgra_to_rgba(pano))
