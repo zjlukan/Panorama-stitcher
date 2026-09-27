@@ -17,7 +17,9 @@ Image stitching is the process of combining multiple images with overlapping fie
 
 ## Using the app:
 The app is hosted on Streamlit Community:  
-> https://panorama-stitcher-abnyyzzhu4zj5bottyv6en.streamlit.app/ 
+> https://panorama-stitcher-abnyyzzhu4zj5bottyv6en.streamlit.app/  
+
+**Running the code locally:**
 
 example:
 
