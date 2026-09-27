@@ -1,8 +1,6 @@
 # Description
 Image stitching is the process of combining multiple images with overlapping fields to produce a composite image that has a wider field of view than a single image. It is used in a variety of fields, such as satellite imaging and medical imaging. This project provides an easy way of stitching a sequence of ordered images and seamlessly blending them. OpenCV is utilized in this project, but none of the functions from the stitcher class were used.
 
-View the project 
-
 # Features  
 **Homography Fitting:**  
 * Features matched using SIFT are run through a ratio test to eliminate ambiguous matches  
@@ -17,15 +15,9 @@ View the project
 **Front end**
 * Streamlit is used for the browser interface. Images are uploaded and assigned an order and the final image can be downloaded as a PNG.
 
-## Dependencies: 
-**Python3**
-**numpy**
-**ctypes**
-
-## Running the code:
-To run the code, run the following command:
-
-python .\pano_stitcher.py [number of images] [image 1 path] ... [image n path] [show steps]
+## Using the app:
+The app is hosted on Streamlit Community:  
+> https://panorama-stitcher-abnyyzzhu4zj5bottyv6en.streamlit.app/ 
 
 example:
 
