@@ -21,8 +21,22 @@ The app is hosted on Streamlit Community:
 
 **Running the code locally:**
 
-example:
+Use the following command in a terminal to clone the repo:  
+```
+git clone https://github.com/zjlukan/Facial-Tracking-and-Emotion-Recognition-Using-Neural-Networks
+```
+Go into the directory then run the following command:  
+```
+pip install -r requirements.txt
+```
+To run the pano-core program locally, use the following command:  
+```
+python3 ./main.py [--show] [image 1 path] [image 2 path] ... [image n path]
+```
 
-python .\pano_stitcher.py 3 image1.png image2.png image3.png 1
+example:  
 
-**Show steps:** either 0 (false) or 1 (true), displays all of the steps in the panorama stitching process
+python .\pano_stitcher.py --show image1.png image2.png image3.png  
+
+**Show steps:**  
+Optional argument that will create a visual for every step in the pano-stitching process if enabled
