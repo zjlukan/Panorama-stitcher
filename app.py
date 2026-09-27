@@ -1,5 +1,5 @@
 """
-Streamlit front end for the ordered-pair panorama stitcher in panorama_core.py.
+Streamlit front end for the ordered-pair panorama stitcher in pano_core.py.
 """
 
 from io import BytesIO
